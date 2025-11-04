@@ -1,13 +1,17 @@
 package org.example.objects;
 
-import org.example.utils.SHA256Hasher;
+import org.example.utils.SHA1Hasher;
 
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 
 public class Blob extends GitObject {
     private byte[] content;
 
     public Blob(byte[] content) {
+        if (content == null) {
+            throw new IllegalArgumentException("Content cannot be null");
+        }
         this.content = content;
         this.type = "blob";
     }
@@ -18,24 +22,24 @@ public class Blob extends GitObject {
     }
 
     @Override
-    public String serialize() {
-        return new String(content, StandardCharsets.UTF_8);
+    public byte[] serialize() {
+        return Arrays.copyOf(content, content.length);
     }
 
     @Override
-    public void deserialize(String data) {
-        this.content = data.getBytes();
+    public void deserialize(byte[] data) {
+        this.content = Arrays.copyOf(data, data.length);
     }
 
     @Override
     protected String computeSha() {
-        String header = "blob\0" +  content.length + "\0";
+        String header = "blob " +  content.length + "\0";
         byte[] headerBytes = header.getBytes(StandardCharsets.UTF_8);
 
         byte[] sha = new byte[headerBytes.length + content.length];
         System.arraycopy(headerBytes, 0, sha, 0, headerBytes.length);
         System.arraycopy(content, 0, sha, headerBytes.length, content.length);
 
-        return SHA256Hasher.hash(sha);
+        return SHA1Hasher.hash(sha);
     }
 }

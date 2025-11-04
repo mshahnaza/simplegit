@@ -4,7 +4,7 @@ import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
-public class SHA256Hasher {
+public class SHA1Hasher {
     public static String hash(byte[] data) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-1");

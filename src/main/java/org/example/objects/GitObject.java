@@ -4,8 +4,8 @@ public abstract class GitObject {
     protected String sha;
     protected String type;
 
-    public abstract String serialize();
-    public abstract void deserialize(String data);
+    public abstract byte[] serialize();
+    public abstract void deserialize(byte[] data);
 
     public String getType() {
         return type;
