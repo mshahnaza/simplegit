@@ -1,12 +1,12 @@
 package org.example.objects;
 
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.*;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 class BlobTest {
 
@@ -33,6 +33,11 @@ class BlobTest {
     }
 
     @Test
+    void should_throwExceptionForNullContent() {
+        assertThrows(IllegalArgumentException.class, () -> new Blob(null));
+    }
+
+    @Test
     void should_setTypeToBlob() {
         assertEquals("blob", blob.getType());
     }
@@ -41,7 +46,6 @@ class BlobTest {
     void should_deserializeContent() {
         byte[] newContent = "New content".getBytes(StandardCharsets.UTF_8);
         blob.deserialize(newContent);
-
         assertArrayEquals(newContent, blob.serialize());
     }
 
@@ -51,16 +55,17 @@ class BlobTest {
         Blob testBlob = new Blob(content);
         String expectedHash = "30d74d258442c7c65512eafab474568dd706c430";
 
-        String actualHash = testBlob.computeSha();
+        String actualHash = testBlob.getHexhash();
         assertEquals(expectedHash, actualHash);
     }
 
     @Test
     void should_handleEmptyContent() {
         Blob emptyBlob = new Blob(new byte[0]);
+        String hexHash = emptyBlob.getHexhash();
 
-        assertNotNull(emptyBlob.computeSha());
-        assertEquals(40, emptyBlob.computeSha().length());
+        assertNotNull(hexHash);
+        assertEquals(40, hexHash.length());
     }
 
     @Test
@@ -69,18 +74,17 @@ class BlobTest {
         Blob binaryBlob = new Blob(binaryContent);
 
         assertArrayEquals(binaryContent, binaryBlob.serialize());
-        assertNotNull(binaryBlob.computeSha());
+        assertNotNull(binaryBlob.getHexhash());
     }
 
     @Test
     void should_handleLargeContent() {
         byte[] largeContent = new byte[10000];
         Arrays.fill(largeContent, (byte) 'A');
-
         Blob largeBlob = new Blob(largeContent);
 
         assertArrayEquals(largeContent, largeBlob.serialize());
-        assertNotNull(largeBlob.computeSha());
+        assertNotNull(largeBlob.getHexhash());
     }
 
     @Test
@@ -88,9 +92,8 @@ class BlobTest {
         byte[] content = "test".getBytes(StandardCharsets.UTF_8);
         Blob testBlob = new Blob(content);
 
-        String hash = testBlob.computeSha();
-
-        assertEquals(40, hash.length());
-        assertTrue(hash.matches("[0-9a-f]{40}"));
+        String hexHash = testBlob.getHexhash();
+        assertEquals(40, hexHash.length());
+        assertTrue(hexHash.matches("[0-9a-f]{40}"));
     }
 }

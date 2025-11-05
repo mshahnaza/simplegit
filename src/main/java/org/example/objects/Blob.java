@@ -32,7 +32,7 @@ public class Blob extends GitObject {
     }
 
     @Override
-    protected String computeSha() {
+    protected byte[] computeHash() {
         String header = "blob " +  content.length + "\0";
         byte[] headerBytes = header.getBytes(StandardCharsets.UTF_8);
 

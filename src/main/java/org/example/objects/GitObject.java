@@ -1,7 +1,9 @@
 package org.example.objects;
 
+import org.example.utils.SHA1Hasher;
+
 public abstract class GitObject {
-    protected String sha;
+    protected byte[] hash;
     protected String type;
 
     public abstract byte[] serialize();
@@ -11,13 +13,20 @@ public abstract class GitObject {
         return type;
     }
 
-    public String getSha() {
-        if(sha == null) {
-            sha = computeSha();
+    public String getHexhash() {
+        if(hash == null) {
+            hash = computeHash();
         }
-        return sha;
+        return SHA1Hasher.toHex(hash);
     }
 
-    protected abstract String computeSha();
+    public byte[] getHash() {
+        if(hash == null) {
+            hash = computeHash();
+        }
+        return hash;
+    }
+
+    protected abstract byte[] computeHash();
 
 }
