@@ -15,11 +15,30 @@ public class SHA1Hasher {
     }
 
     public static String toHex(byte[] bytes) {
-        BigInteger number = new BigInteger(1, bytes);
-        String hex = number.toString(16);
-        while (hex.length() < 40) {
-            hex = "0" + hex;
+        if (bytes == null) {
+            throw new IllegalArgumentException("Bytes array cannot be null");
         }
-        return hex;
+        StringBuilder hex = new StringBuilder(bytes.length * 2);
+        for (byte b : bytes) {
+            hex.append(String.format("%02x", b & 0xFF));
+        }
+        return hex.toString();
+    }
+
+    public static byte[] fromHex(String hex) {
+        if (hex == null) {
+            throw new IllegalArgumentException("Hex string cannot be null");
+        }
+        if (hex.length() != 40) {
+            throw new IllegalArgumentException("SHA-1 hash must be 40 characters long: " + hex);
+        }
+
+        byte[] bytes = new byte[20];
+        for (int i = 0; i < 20; i++) {
+            int index = i * 2;
+            int value = Integer.parseInt(hex.substring(index, index + 2), 16);
+            bytes[i] = (byte) value;
+        }
+        return bytes;
     }
 }
