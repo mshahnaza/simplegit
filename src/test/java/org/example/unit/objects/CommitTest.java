@@ -1,5 +1,6 @@
-package org.example.objects;
+package org.example.unit.objects;
 
+import org.example.objects.Commit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

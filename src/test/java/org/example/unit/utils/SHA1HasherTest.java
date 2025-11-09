@@ -1,5 +1,6 @@
-package org.example.utils;
+package org.example.unit.utils;
 
+import org.example.utils.SHA1Hasher;
 import org.junit.jupiter.api.Test;
 import java.nio.charset.StandardCharsets;
 import static org.junit.jupiter.api.Assertions.*;

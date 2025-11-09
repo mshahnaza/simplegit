@@ -1,5 +1,6 @@
-package org.example.objects;
+package org.example.unit.objects;
 
+import org.example.objects.Tree;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -104,8 +105,8 @@ class TreeTest {
         Tree tree2 = new Tree();
         tree2.deserialize(serialized);
 
-        byte[] hash1 = tree1.computeHash();
-        byte[] hash2 = tree2.computeHash();
+        byte[] hash1 = tree1.getHash();
+        byte[] hash2 = tree2.getHash();
 
         assertArrayEquals(hash1, hash2, "Hash should be consistent after serialization/deserialization");
     }

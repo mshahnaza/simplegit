@@ -109,7 +109,7 @@ public class ObjectStorage {
         return baos.toByteArray();
     }
 
-    private GitObject createObject(String type, String hash, byte[] content) {
+    private GitObject createObject(String type, String hash, byte[] content) throws IOException {
         GitObject obj;
         switch (type) {
             case "blob":
@@ -122,7 +122,7 @@ public class ObjectStorage {
                 obj = new Commit();
                 break;
             default:
-                throw new IllegalArgumentException("Unknown object type: " + type);
+                throw new IOException("Unknown object type: " + type);
         }
 
         obj.deserialize(content);

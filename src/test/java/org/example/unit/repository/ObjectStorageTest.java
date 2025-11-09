@@ -1,8 +1,9 @@
-package org.example.repository;
+package org.example.unit.repository;
 
 import org.example.objects.Blob;
 import org.example.objects.Commit;
 import org.example.objects.Tree;
+import org.example.repository.ObjectStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
