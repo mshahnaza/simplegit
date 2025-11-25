@@ -43,6 +43,11 @@ public class Repository {
         System.out.println("Initialized empty Git repository in " + gitDir);
     }
 
+    public boolean isRepository() {
+        return java.nio.file.Files.exists(gitDir) &&
+                java.nio.file.Files.isDirectory(gitDir);
+    }
+
     public void add(String filePath) throws IOException {
         index.load();
         if (filePath == null || filePath.trim().isEmpty()) {
@@ -72,6 +77,7 @@ public class Repository {
         } else {
             addFile(normalizedPath, headFiles);
         }
+        index.save();
     }
 
     private void addFile(String filePath, Map<String, byte[]> headFiles) throws IOException {
@@ -94,7 +100,6 @@ public class Repository {
         objectStorage.store(blob);
         IndexEntry entry = IndexEntry.fromFile(filePath, blob.getHash(), file);
         index.add(entry);
-        index.save();
 
         System.out.println("add '" + filePath + "'");
     }
@@ -112,6 +117,7 @@ public class Repository {
                         }
                     });
         }
+        index.save();
     }
 
 
@@ -338,8 +344,13 @@ public class Repository {
     public void checkout(String branch) throws IOException {
         if(refStorage.branchExists(branch)) {
             checkoutBranch(branch);
-        } else {
+        } else if (branch.matches("[0-9a-f]{40}")) {
             checkoutCommit(branch);
+        } else {
+            throw new IllegalArgumentException(
+                    "error: pathspec '" + branch + "' did not match any file(s) known to git\n" +
+                            "Did you mean to create a new branch? Use: git checkout -b " + branch
+            );
         }
     }
 
