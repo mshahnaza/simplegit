@@ -155,6 +155,7 @@ public class Commit extends GitObject {
             }
         }
         this.message = body;
+        this.hash = null;
     }
 
     @Override

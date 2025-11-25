@@ -44,6 +44,7 @@ public class Tree extends GitObject {
     public void addEntry(Entry entry) {
         entries.add(entry);
         entries.sort(Comparator.comparing(Entry::getName));
+        this.hash = null;
     }
 
     public void addFile(String filename, byte[] hash) {
@@ -128,6 +129,7 @@ public class Tree extends GitObject {
         }
 
         entries.sort(Comparator.comparing(Entry::getName));
+        this.hash = null;
     }
 
     @Override

@@ -44,7 +44,14 @@ public class Repository {
     }
 
     public void add(String filePath) throws IOException {
-        Path file = workingDir.resolve(filePath);
+        index.load();
+        if (filePath == null || filePath.trim().isEmpty()) {
+            throw new IllegalArgumentException("File path cannot be empty");
+        }
+        String normalizedPath = normalizePath(filePath);
+        Map<String, byte[]> headFiles = getHeadFiles();
+
+        Path file = workingDir.resolve(normalizedPath);
 
         if (!Files.exists(file)) {
             throw new IOException("File does not exist: " + filePath);
@@ -55,24 +62,36 @@ public class Repository {
                 stream.filter(Files::isRegularFile)
                         .forEach(subFile -> {
                             try {
-                                String relativePath = workingDir.relativize(subFile).toString();
-                                addFile(relativePath);
+                                String relativePath = normalizePath(subFile);
+                                addFile(relativePath, headFiles);
                             } catch (IOException e) {
                                 throw new RuntimeException(e);
                             }
                         });
             }
         } else {
-            addFile(filePath);
+            addFile(normalizedPath, headFiles);
         }
     }
 
-    private void addFile(String filePath) throws IOException {
+    private void addFile(String filePath, Map<String, byte[]> headFiles) throws IOException {
         Path file = workingDir.resolve(filePath);
         byte[] content = Files.readAllBytes(file);
         Blob blob = new Blob(content);
-        objectStorage.store(blob);
 
+        IndexEntry existingEntry = index.getEntry(filePath);
+        boolean inHead = headFiles.containsKey(filePath);
+        byte[] headHash = headFiles.get(filePath);
+
+        if (existingEntry != null && Arrays.equals(existingEntry.getHash(), blob.getHash())) {
+            return;
+        }
+
+        if (inHead && headHash != null && Arrays.equals(headHash, blob.getHash())) {
+            return;
+        }
+
+        objectStorage.store(blob);
         IndexEntry entry = IndexEntry.fromFile(filePath, blob.getHash(), file);
         index.add(entry);
         index.save();
@@ -86,7 +105,7 @@ public class Repository {
                     .filter(p -> !p.startsWith(gitDir))
                     .forEach(file -> {
                         try {
-                            String relativePath = workingDir.relativize(file).toString();
+                            String relativePath = normalizePath(file);
                             add(relativePath);
                         } catch (IOException e) {
                             System.err.println("Failed to add " + file + ": " + e.getMessage());
@@ -97,57 +116,70 @@ public class Repository {
 
 
     public void remove(String filePath, boolean cached, boolean force) throws IOException {
-        Path file = workingDir.resolve(filePath);
+        index.load();
+        String normalizedPath = normalizePath(filePath);
+        Path file = workingDir.resolve(normalizedPath);
 
-        if (!index.contains(filePath)) {
-            throw new IOException("File not in index: " + filePath);
+        IndexEntry indexEntry = index.getEntry(normalizedPath);
+        boolean fileExistsInWorkingDir = Files.exists(file);
+        Map<String, byte[]> headFiles = getHeadFiles();
+        boolean fileExistsInHead = headFiles.containsKey(normalizedPath);
+
+        if (indexEntry == null && !fileExistsInWorkingDir && !fileExistsInHead) {
+            throw new IOException("path '" + filePath + "' did not match any files");
         }
 
-        IndexEntry entry = index.getEntry(filePath);
-        if (entry == null) {
-            throw new IOException("Index entry missing for: " + filePath);
-        }
-
-        if (!cached) {
-            if (Files.exists(file)) {
-                boolean modified;
-                try {
-                    modified = entry.isModified(file);
-                } catch (IOException e) {
-                    if (!force) {
-                        throw new IOException("Cannot determine file state for " + filePath + ": " + e.getMessage(), e);
-                    } else {
-                        modified = true;
-                    }
+        if (!force && fileExistsInWorkingDir) {
+            if (indexEntry != null && indexEntry.isModified(file)) {
+                throw new IOException("the following file has local modifications:\n    " + filePath +
+                        "\n(use --force to force removal)");
+            }
+            if (indexEntry == null && fileExistsInHead) {
+                byte[] headHash = headFiles.get(normalizedPath);
+                byte[] workingHash = getWorkingFiles().get(normalizedPath);
+                if (headHash != null && workingHash != null && !Arrays.equals(headHash, workingHash)) {
+                    throw new IOException("the following file has local modifications:\n    " + filePath +
+                            "\n(use --force to force removal)");
                 }
-
-                if (modified && !force) {
-                    throw new IOException("File has unstaged modifications: " + filePath +
-                            ". Use --force to remove it.");
-                }
-
-                try {
-                    Files.delete(file);
-                } catch (IOException e) {
-                    throw new IOException("Failed to delete file from working directory: " + filePath, e);
-                }
-            } else {
-                System.out.println("Warning: working file not found: " + filePath);
             }
         }
 
-        index.remove(filePath);
-        index.save();
-
-        if (cached) {
-            System.out.println("Removed from index: " + filePath);
-        } else {
-            System.out.println("Removed: " + filePath);
+        if (!cached && fileExistsInWorkingDir) {
+            try {
+                Files.delete(file);
+            } catch (IOException e) {
+                throw new IOException("unable to remove '" + normalizedPath + "': " + e.getMessage());
+            }
         }
+
+        if (fileExistsInHead && !cached) {
+            IndexEntry removalEntry = createRemovalEntry(normalizedPath);
+            index.add(removalEntry);
+        }
+
+        if (indexEntry != null) {
+            index.remove(normalizedPath);
+        }
+        index.save();
+        if (cached) {
+            System.out.println("removed from index: " + filePath);
+        } else {
+            System.out.println("removed: " + filePath);
+        }
+    }
+
+    private IndexEntry createRemovalEntry(String filePath) {
+        return new IndexEntry(filePath, new byte[20], 0, 0, System.currentTimeMillis()/1000, 0);
     }
 
     public String commit(String message, String author) throws IOException {
         index.load();
+        if (message == null || message.trim().isEmpty()) {
+            throw new IllegalArgumentException("Commit message cannot be empty");
+        }
+        if (author == null || author.trim().isEmpty()) {
+            throw new IllegalArgumentException("Author cannot be empty");
+        }
 
         if(index.isEmpty()) throw new IllegalStateException("nothing to commit, working tree clean");
 
@@ -186,37 +218,38 @@ public class Repository {
 
     private Tree buildTreeFromIndex() throws IOException {
         Map<String, List<IndexEntry>> entriesByDir = new HashMap<>();
-
         entriesByDir.put("", new ArrayList<>());
 
         for (IndexEntry entry : index.getEntries()) {
-            String path = entry.getPath();
-
-            String currentDir = "";
-            String[] parts = path.split("/");
-
-            for (int i = 0; i < parts.length - 1; i++) {
-                currentDir = currentDir.isEmpty() ? parts[i] : currentDir + "/" + parts[i];
-                entriesByDir.computeIfAbsent(currentDir, k -> new ArrayList<>());
+            if (entry.getMode() == 0) {
+                continue;
             }
-
+            String path = entry.getPath();
             String fileDir = getDirectoryPath(path);
             entriesByDir.computeIfAbsent(fileDir, k -> new ArrayList<>()).add(entry);
         }
 
+        Set<String> allDirs = new HashSet<>(entriesByDir.keySet());
+        for (String dir : new ArrayList<>(allDirs)) {
+            String parent = getDirectoryPath(dir);
+            while (!parent.isEmpty() && !allDirs.contains(parent)) {
+                entriesByDir.put(parent, new ArrayList<>());
+                allDirs.add(parent);
+                parent = getDirectoryPath(parent);
+            }
+        }
+
         List<String> directories = new ArrayList<>(entriesByDir.keySet());
         directories.sort((a, b) -> Integer.compare(countSlashes(b), countSlashes(a)));
+
 
         Map<String, Tree> trees = new HashMap<>();
 
         for (String dir : directories) {
             Tree tree = new Tree();
 
-            List<IndexEntry> files = new ArrayList<>(entriesByDir.getOrDefault(dir, Collections.emptyList()));
-            files.sort(Comparator.comparing(IndexEntry::getPath));
-            for (IndexEntry entry : files) {
+            for (IndexEntry entry : entriesByDir.get(dir)) {
                 String entryDir = getDirectoryPath(entry.getPath());
-
                 if (dir.equals(entryDir)) {
                     String fileName = getFileName(entry.getPath());
                     String mode = (entry.getMode() == IndexEntry.MODE_EXECUTABLE) ? "100755" : "100644";
@@ -224,12 +257,9 @@ public class Repository {
                 }
             }
 
-            List<String> subDirs = new ArrayList<>(trees.keySet());
-            subDirs.sort(String::compareTo);
-            for (String subDir : subDirs) {
+            for (String subDir : trees.keySet()) {
                 if (isDirectChild(dir, subDir)) {
                     Tree subTree = trees.get(subDir);
-                    objectStorage.store(subTree);
 
                     String dirName = getFileName(subDir);
                     tree.addDirectory(dirName, subTree.getHash());
@@ -237,9 +267,23 @@ public class Repository {
             }
 
             trees.put(dir, tree);
+            objectStorage.store(tree);
         }
 
         Tree rootTree = trees.get("");
+        if (rootTree == null) {
+            rootTree = new Tree();
+        }
+
+        for (Map.Entry<String, Tree> entry : trees.entrySet()) {
+            String dirPath = entry.getKey();
+            Tree tree = entry.getValue();
+
+            if (!dirPath.isEmpty() && !dirPath.contains("/")) {
+                rootTree.addDirectory(dirPath, tree.getHash());
+            }
+        }
+
         objectStorage.store(rootTree);
         return rootTree;
     }
@@ -338,7 +382,10 @@ public class Repository {
                 Blob blob = (Blob) objectStorage.load(entry.getHexHash());
                 Path filePath = currDir.resolve(entry.getName());
 
-                Files.createDirectories(filePath.getParent());
+                Path parent = filePath.getParent();
+                if (parent != null) {
+                    Files.createDirectories(parent);
+                }
                 Files.write(filePath, blob.serialize());
             } else if(entry.getType().equals("tree")) {
                 Path newDir = currDir.resolve(entry.getName());
@@ -355,16 +402,43 @@ public class Repository {
             );
         }
 
+        Map<String, byte[]> headFiles = getHeadFiles();
+        for (String filePath : headFiles.keySet()) {
+            Path file = workingDir.resolve(filePath);
+            if (Files.exists(file)) {
+                try {
+                    Files.delete(file);
+                    deleteEmptyParentDirectories(file.getParent());
+                } catch (IOException e) {
+                }
+            }
+        }
         try (var stream = Files.walk(workingDir)) {
-            stream
-                    .filter(p -> !p.startsWith(gitDir))
-                    .sorted((a, b) -> b.compareTo(a))
-                    .forEach(path -> {
+            stream.filter(Files::isRegularFile)
+                    .filter(path -> !path.startsWith(gitDir))
+                    .forEach(file -> {
                         try {
-                            Files.deleteIfExists(path);
+                            String relativePath = normalizePath(file);
+                            if (!headFiles.containsKey(relativePath)) {
+                                Files.delete(file);
+                                deleteEmptyParentDirectories(file.getParent());
+                            }
                         } catch (IOException e) {
                         }
                     });
+        }
+    }
+
+    private void deleteEmptyParentDirectories(Path dir) throws IOException {
+        while (dir != null && !dir.equals(workingDir) && Files.exists(dir)) {
+            try (var stream = Files.list(dir)) {
+                if (!stream.findAny().isPresent()) {
+                    Files.delete(dir);
+                    dir = dir.getParent();
+                } else {
+                    break;
+                }
+            }
         }
     }
 
@@ -373,7 +447,10 @@ public class Repository {
 
         for (IndexEntry entry : index.getEntries()) {
             Path file = workingDir.resolve(entry.getPath());
-            if (Files.exists(file) && entry.isModified(file)) {
+            if (!Files.exists(file)) {
+                return true;
+            }
+            if (entry.isModified(file)) {
                 return true;
             }
         }
@@ -592,7 +669,7 @@ public class Repository {
                     .filter(path -> !path.startsWith(gitDir))
                     .forEach(file -> {
                         try {
-                            String relativePath = workingDir.relativize(file).toString();
+                            String relativePath = normalizePath(file);
                             byte[] content = Files.readAllBytes(file);
                             Blob blob = new Blob(content);
                             workingFiles.put(relativePath, blob.getHash());
@@ -631,5 +708,19 @@ public class Repository {
                 collectFilesFromTree(subTree, fullPath, files);
             }
         }
+    }
+
+    private boolean isFileInHead(String filePath) throws IOException {
+        Map<String, byte[]> headFiles = getHeadFiles();
+        return headFiles.containsKey(filePath);
+    }
+
+    private String normalizePath(String path) {
+        Path resolved = workingDir.resolve(path);
+        return workingDir.relativize(resolved).toString().replace(File.separatorChar, '/');
+    }
+
+    private String normalizePath(Path path) {
+        return workingDir.relativize(path).toString().replace(File.separatorChar, '/');
     }
 }

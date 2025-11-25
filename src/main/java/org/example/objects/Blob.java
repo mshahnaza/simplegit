@@ -29,6 +29,7 @@ public class Blob extends GitObject {
     @Override
     public void deserialize(byte[] data) {
         this.content = Arrays.copyOf(data, data.length);
+        this.hash = null;
     }
 
     @Override
