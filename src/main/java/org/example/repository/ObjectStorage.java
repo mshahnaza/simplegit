@@ -21,8 +21,11 @@ public class ObjectStorage {
     }
 
     public void store(GitObject object) throws IOException {
-        byte[] serialized = object.serialize();
         String hash = object.getHexhash();
+        if (exists(hash)) {
+            return;
+        }
+        byte[] serialized = object.serialize();
         String header = object.getType() + " " + serialized.length + "\0";
         byte[] headerBytes = header.getBytes();
 

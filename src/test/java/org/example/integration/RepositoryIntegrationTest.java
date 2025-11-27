@@ -129,7 +129,7 @@ class RepositoryIntegrationTest {
         Files.write(tempDir.resolve("README.md"), "# Project".getBytes());
 
         repo.addAll();
-        String commitHash = repo.commit("Initial project structure", "Test User <test@example.com>");
+        repo.commit("Initial project structure", "Test User <test@example.com>");
 
         repo.createBranch("feature");
         repo.checkout("feature");
@@ -143,6 +143,9 @@ class RepositoryIntegrationTest {
         String content = Files.readString(tempDir.resolve("src/main/Main.java"));
         assertEquals("class Main {}", content);
 
+        Files.write(tempDir.resolve("src/main/Main.java"), "class Main { updated }".getBytes());
+        repo.add("src/main/Main.java");
+        repo.commit("Restore original Main.java", "Test User <test@example.com>");
         repo.checkout("feature");
         content = Files.readString(tempDir.resolve("src/main/Main.java"));
         assertEquals("class Main { void feature() {} }", content);

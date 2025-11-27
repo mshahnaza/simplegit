@@ -112,6 +112,7 @@ public class Repository {
 
     public void addAll() throws IOException {
         index.load();
+        Map<String, byte[]> headFiles = getHeadFiles();
         try (var stream = Files.walk(workingDir)) {
             stream.filter(Files::isRegularFile)
                     .forEach(file -> {
@@ -122,7 +123,7 @@ public class Repository {
                                 return;
                             }
 
-                            add(relativePath);
+                            addFile(relativePath, headFiles);
                         } catch (IOException e) {
                             System.err.println("Failed to add " + file + ": " + e.getMessage());
                         }
@@ -169,11 +170,6 @@ public class Repository {
             }
         }
 
-        if (fileExistsInHead && !cached) {
-            IndexEntry removalEntry = createRemovalEntry(normalizedPath);
-            index.add(removalEntry);
-        }
-
         if (indexEntry != null) {
             index.remove(normalizedPath);
         }
@@ -185,10 +181,6 @@ public class Repository {
         }
     }
 
-    private IndexEntry createRemovalEntry(String filePath) {
-        return new IndexEntry(filePath, new byte[20], 0, 0, System.currentTimeMillis());
-    }
-
     public String commit(String message, String author) throws IOException {
         index.load();
         if (message == null || message.trim().isEmpty()) {
@@ -198,7 +190,9 @@ public class Repository {
             throw new IllegalArgumentException("Author cannot be empty");
         }
 
-        if(index.isEmpty()) throw new IllegalStateException("nothing to commit, working tree clean");
+        if (!hasChangesToCommit()) {
+            throw new IllegalStateException("nothing to commit, working tree clean");
+        }
 
         Tree rootTree = buildTreeFromIndex();
         objectStorage.store(rootTree);
@@ -220,10 +214,12 @@ public class Repository {
 
         objectStorage.store(commit);
 
-        refStorage.updateHeadCommit(commit.getHexhash());
-
-        index.clear();
-        index.save();
+        if (parentHash == null) {
+            refStorage.createBranch("master", commit.getHexhash());
+            refStorage.setHead("master");
+        } else {
+            refStorage.updateHeadCommit(commit.getHexhash());
+        }
 
         String branch = refStorage.getCurrentBranch();
         if (branch == null) branch = "detached HEAD";
@@ -238,9 +234,6 @@ public class Repository {
         entriesByDir.put("", new ArrayList<>());
 
         for (IndexEntry entry : index.getEntries()) {
-            if (entry.getMode() == 0) {
-                continue;
-            }
             String path = entry.getPath();
             String fileDir = getDirectoryPath(path);
             entriesByDir.computeIfAbsent(fileDir, k -> new ArrayList<>()).add(entry);
@@ -282,9 +275,8 @@ public class Repository {
                     tree.addDirectory(dirName, subTree.getHash());
                 }
             }
-
-            trees.put(dir, tree);
             objectStorage.store(tree);
+            trees.put(dir, tree);
         }
 
         Tree rootTree = trees.get("");
@@ -332,6 +324,39 @@ public class Repository {
         return !afterParent.contains("/");
     }
 
+    private boolean hasChangesToCommit() throws IOException {
+        if (index.isEmpty()) {
+            Map<String, byte[]> headFiles = getHeadFiles();
+            for (String headPath : headFiles.keySet()) {
+                if (!index.contains(headPath)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        Map<String, byte[]> headFiles = getHeadFiles();
+        Map<String, byte[]> indexFiles = getIndexFiles();
+
+        for (Map.Entry<String, byte[]> entry : indexFiles.entrySet()) {
+            String path = entry.getKey();
+            byte[] indexHash = entry.getValue();
+            byte[] headHash = headFiles.get(path);
+
+            if (headHash == null || !Arrays.equals(headHash, indexHash)) {
+                return true;
+            }
+        }
+
+        for (String headPath : headFiles.keySet()) {
+            if (!indexFiles.containsKey(headPath)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public void createBranch(String branch) throws IOException {
         String headCommit = refStorage.getHeadCommit();
         if(headCommit == null) throw new IllegalStateException("Cannot create branch - no commits yet");
@@ -372,6 +397,7 @@ public class Repository {
         clearWorkingDirectory();
 
         restoreTree(commit.getTreeHash(), workingDir);
+        updateIndexFromCommit(commit);
 
         refStorage.setHead(branch);
         System.out.println("Switched to branch '" + branch + "'");
@@ -390,10 +416,19 @@ public class Repository {
 
         clearWorkingDirectory();
         restoreTree(commit.getTreeHash(), workingDir);
+        updateIndexFromCommit(commit);
         refStorage.setDetachedHead(commitHash);
 
         System.out.println("Note: switching to detached HEAD state");
         System.out.println("HEAD is now at " + commitHash.substring(0, 7));
+    }
+
+    public void checkoutB(String branch) throws IOException {
+        if (hasUncommittedChanges()) {
+            throw new IOException("Your local changes would be lost. Please commit or stash them first.");
+        }
+        createBranch(branch);
+        checkout(branch);
     }
 
     private void restoreTree(byte[] treeHash, Path currDir) throws IOException {
@@ -415,6 +450,31 @@ public class Repository {
                 restoreTree(entry.getHash(), newDir);
             }
         }
+    }
+
+    private void updateIndexFromCommit(Commit commit) throws IOException {
+        index.clear();
+
+        Map<String, byte[]> commitFiles = getFilesFromCommit(commit);
+        for (Map.Entry<String, byte[]> entry : commitFiles.entrySet()) {
+            String filePath = entry.getKey();
+            byte[] hash = entry.getValue();
+            Path file = workingDir.resolve(filePath);
+
+            if (Files.exists(file)) {
+                IndexEntry indexEntry = IndexEntry.fromFile(filePath, hash, file);
+                index.add(indexEntry);
+            }
+        }
+
+        index.save();
+    }
+
+    private Map<String, byte[]> getFilesFromCommit(Commit commit) throws IOException {
+        Map<String, byte[]> files = new HashMap<>();
+        Tree tree = (Tree) objectStorage.load(SHA1Hasher.toHex(commit.getTreeHash()));
+        collectFilesFromTree(tree, "", files);
+        return files;
     }
 
     private void clearWorkingDirectory() throws IOException {
@@ -441,6 +501,10 @@ public class Repository {
                     .forEach(file -> {
                         try {
                             String relativePath = normalizePath(file);
+
+                            if (relativePath.startsWith(".git")) {
+                                return;
+                            }
                             if (!headFiles.containsKey(relativePath)) {
                                 Files.delete(file);
                                 deleteEmptyParentDirectories(file.getParent());
@@ -466,7 +530,6 @@ public class Repository {
 
     private boolean hasUncommittedChanges() throws IOException {
         index.load();
-
         for (IndexEntry entry : index.getEntries()) {
             Path file = workingDir.resolve(entry.getPath());
             if (!Files.exists(file)) {
@@ -574,42 +637,39 @@ public class Repository {
                 continue;
             }
 
+            if (inHead && !inIndex && !inWork) {
+                stagedDeleted.add(path);
+                continue;
+            }
+
             if (!inHead && !inIndex && inWork) {
                 untracked.add(path);
                 continue;
             }
 
-            if (inHead) {
-                if (!inIndex && !inWork) {
-                    stagedDeleted.add(path);
-                    continue;
-                }
+            if (inHead && inIndex && !inWork) {
+                unstagedDeleted.add(path);
+                continue;
+            }
 
-                if (inIndex && !inWork) {
-                    if (hashesEqual(h, i)) {
-                        unstagedDeleted.add(path);
-                    } else {
-                        stagedDeleted.add(path);
-                    }
-                    continue;
+            if (inHead && inIndex && inWork) {
+                if (!hashesEqual(h, i)) {
+                    stagedModified.add(path);
                 }
+                if (!hashesEqual(i, w)) {
+                    unstagedModified.add(path);
+                }
+                continue;
+            }
 
-                if (!inIndex && inWork) {
-                    if (!hashesEqual(h, w)) {
-                        unstagedModified.add(path);
-                    }
-                    continue;
-                }
+            if (inHead && !inIndex && inWork && !hashesEqual(h, w)) {
+                unstagedModified.add(path);
+                continue;
+            }
 
-                if (inIndex && inWork) {
-                    if (!hashesEqual(i, h)) {
-                        stagedModified.add(path);
-                    }
-                    if (!hashesEqual(w, i)) {
-                        unstagedModified.add(path);
-                    }
-                    continue;
-                }
+            if (inHead && inIndex && !inWork && !hashesEqual(h, i)) {
+                unstagedDeleted.add(path);
+                continue;
             }
         }
 
@@ -645,7 +705,6 @@ public class Repository {
 
         if (hasStaged) {
             System.out.println("Changes to be committed:");
-            System.out.println("  (use \"git restore --staged <file>...\" to unstage)");
             stagedAdded.forEach(p -> System.out.println("    new file:   " + p));
             stagedModified.forEach(p -> System.out.println("    modified:   " + p));
             stagedDeleted.forEach(p -> System.out.println("    deleted:    " + p));
@@ -655,7 +714,6 @@ public class Repository {
         if (hasUnstaged) {
             System.out.println("Changes not staged for commit:");
             System.out.println("  (use \"git add <file>...\" to update what will be committed)");
-            System.out.println("  (use \"git restore <file>...\" to discard changes in working directory)");
             unstagedModified.forEach(p -> System.out.println("    modified:   " + p));
             unstagedDeleted.forEach(p -> System.out.println("    deleted:    " + p));
             System.out.println();

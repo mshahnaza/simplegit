@@ -14,8 +14,7 @@ public class CheckoutCommand implements Command {
 
         if (args.length >= 2 && "-b".equals(args[0])) {
             String newBranch = args[1];
-            repository.createBranch(newBranch);
-            repository.checkout(newBranch);
+            repository.checkoutB(newBranch);
         } else {
             String target = args[0];
             repository.checkout(target);
