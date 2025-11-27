@@ -21,9 +21,6 @@ public class CommandParser {
         if (args.length == 0) {
             throw new IllegalArgumentException("No command specified");
         }
-        if (args.length == 0) {
-            throw new IllegalArgumentException("No command specified");
-        }
 
         String commandName = args[0];
         Command command = commands.get(commandName);

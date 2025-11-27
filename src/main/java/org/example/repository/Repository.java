@@ -19,7 +19,7 @@ public class Repository {
     private final Index index;
 
     public Repository(Path workingDir) {
-        this.workingDir = workingDir.toAbsolutePath();
+        this.workingDir = workingDir.toAbsolutePath().normalize();
         this.gitDir = workingDir.resolve(".git");
         this.objectStorage = new ObjectStorage(gitDir);
         this.refStorage = new RefStorage(gitDir);
@@ -54,6 +54,9 @@ public class Repository {
             throw new IllegalArgumentException("File path cannot be empty");
         }
         String normalizedPath = normalizePath(filePath);
+        if (normalizedPath.startsWith(".git/")) {
+            return;
+        }
         Map<String, byte[]> headFiles = getHeadFiles();
 
         Path file = workingDir.resolve(normalizedPath);
@@ -81,6 +84,9 @@ public class Repository {
     }
 
     private void addFile(String filePath, Map<String, byte[]> headFiles) throws IOException {
+        if (filePath.startsWith(".git/")) {
+            return;
+        }
         Path file = workingDir.resolve(filePath);
         byte[] content = Files.readAllBytes(file);
         Blob blob = new Blob(content);
@@ -105,12 +111,17 @@ public class Repository {
     }
 
     public void addAll() throws IOException {
+        index.load();
         try (var stream = Files.walk(workingDir)) {
             stream.filter(Files::isRegularFile)
-                    .filter(p -> !p.startsWith(gitDir))
                     .forEach(file -> {
                         try {
                             String relativePath = normalizePath(file);
+
+                            if (relativePath.startsWith(".git")) {
+                                return;
+                            }
+
                             add(relativePath);
                         } catch (IOException e) {
                             System.err.println("Failed to add " + file + ": " + e.getMessage());
@@ -681,9 +692,11 @@ public class Repository {
                     .forEach(file -> {
                         try {
                             String relativePath = normalizePath(file);
-                            byte[] content = Files.readAllBytes(file);
-                            Blob blob = new Blob(content);
-                            workingFiles.put(relativePath, blob.getHash());
+                            if (!relativePath.startsWith(".git")) {
+                                byte[] content = Files.readAllBytes(file);
+                                Blob blob = new Blob(content);
+                                workingFiles.put(relativePath, blob.getHash());
+                            }
                         } catch (IOException e) {
                         }
                     });
