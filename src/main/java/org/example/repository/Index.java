@@ -3,15 +3,11 @@ package org.example.repository;
 import org.example.utils.SHA1Hasher;
 
 import java.io.*;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 
 public class Index {
-    private static final byte[] SIGNATURE = "DIRC".getBytes(StandardCharsets.UTF_8);
-    private static final int VERSION = 2;
-
     private final Map<String, IndexEntry> entries;
     private final Path indexFile;
 
@@ -55,96 +51,49 @@ public class Index {
     }
 
     public void save() throws IOException {
-        ByteArrayOutputStream dataStream = new ByteArrayOutputStream();
-        try (DataOutputStream out = new DataOutputStream(dataStream)) {
-            out.write(SIGNATURE);
-            out.writeInt(VERSION);
-            out.writeInt(entries.size());
-
-            List<IndexEntry> sorted = getEntries();
-            for (IndexEntry entry : sorted) {
-                writeEntry(out, entry);
+        ByteArrayOutputStream tempStream = new ByteArrayOutputStream();
+        try (DataOutputStream tempOut = new DataOutputStream(tempStream)) {
+            tempOut.writeInt(entries.size());
+            for (IndexEntry entry : getEntries()) {
+                writeEntry(tempOut, entry);
             }
         }
 
-        byte[] data = dataStream.toByteArray();
+        byte[] data = tempStream.toByteArray();
         byte[] checksum = SHA1Hasher.hash(data);
 
-        try (FileOutputStream fos = new FileOutputStream(indexFile.toFile());
-             BufferedOutputStream bos = new BufferedOutputStream(fos)) {
-            bos.write(data);
-            bos.write(checksum);
+        try (DataOutputStream out = new DataOutputStream(new FileOutputStream(indexFile.toFile()))) {
+            out.write(data);
+            out.write(checksum);
         }
     }
 
     private void writeEntry(DataOutputStream out, IndexEntry entry) throws IOException {
-        out.writeInt((int) entry.getMtimeSec());
-        out.writeInt(entry.getMtimeNano());
-        out.writeInt((int) entry.getMtimeSec());
-        out.writeInt(entry.getMtimeNano());
-
-        out.writeInt(0);
-        out.writeInt(0);
-
-        out.writeInt(entry.getMode());
-
-        out.writeInt(0);
-        out.writeInt(0);
-
-        out.writeInt(entry.getSize());
-
+        out.writeUTF(entry.getPath());
         out.write(entry.getHash());
-
-        byte[] pathBytes = entry.getPath().getBytes(StandardCharsets.UTF_8);
-        if (pathBytes.length > 0xFFF) {
-            throw new IOException("Path too long: " + entry.getPath());
-        }
-        short flags = (short) pathBytes.length;
-        out.writeShort(flags);
-
-        out.write(pathBytes);
-
-        int entrySize = 62 + pathBytes.length;
-        int padding = (8 - (entrySize % 8)) % 8;
-        if (padding > 0) {
-            out.write(new byte[padding]);
-        }
+        out.writeInt(entry.getMode());
+        out.writeInt(entry.getSize());
+        out.writeLong(entry.getMtimeMillis());
     }
 
     public void load() throws IOException {
         entries.clear();
 
-        if (!Files.exists(indexFile)) {
-            return;
-        }
+        if (!Files.exists(indexFile)) return;
 
         byte[] allData = Files.readAllBytes(indexFile);
-        if (allData.length < 12 + 20) {
-            throw new IOException("Index file too short");
-        }
+        if (allData.length < 20) throw new IOException("File too short");
 
-        byte[] fileDataWithoutChecksum = Arrays.copyOfRange(allData, 0, allData.length - 20);
+        byte[] data = Arrays.copyOfRange(allData, 0, allData.length - 20);
         byte[] expectedChecksum = Arrays.copyOfRange(allData, allData.length - 20, allData.length);
-        byte[] actualChecksum = SHA1Hasher.hash(fileDataWithoutChecksum);
+        byte[] actualChecksum = SHA1Hasher.hash(data);
 
         if (!Arrays.equals(expectedChecksum, actualChecksum)) {
-            throw new IOException("Index file checksum mismatch");
+            throw new IOException("Index corrupted");
         }
 
-        ByteArrayInputStream byteStream = new ByteArrayInputStream(fileDataWithoutChecksum);
+        ByteArrayInputStream byteStream = new ByteArrayInputStream(data);
         try (DataInputStream in = new DataInputStream(byteStream)) {
-
-            byte[] sig = new byte[4];
-            in.readFully(sig);
-            if (!Arrays.equals(sig, SIGNATURE)) {
-                throw new IOException("Invalid index signature");
-            }
-
-            int version = in.readInt();
-            if (version != VERSION) {
-                throw new IOException("Unsupported index version: " + version);
-            }
-
             int entryCount = in.readInt();
 
             for (int i = 0; i < entryCount; i++) {
@@ -155,39 +104,13 @@ public class Index {
     }
 
     private IndexEntry readEntry(DataInputStream in) throws IOException {
-        int ctimeSec = in.readInt();
-        int ctimeNano = in.readInt();
-        int mtimeSec = in.readInt();
-        int mtimeNano = in.readInt();
-
-        in.skipBytes(8);
-
-        int mode = in.readInt();
-
-        in.skipBytes(8);
-
-        int size = in.readInt();
-
+        String path = in.readUTF();
         byte[] hash = new byte[20];
         in.readFully(hash);
+        int mode = in.readInt();
+        int size = in.readInt();
+        long mtimeMillis = in.readLong();
 
-        short flags = in.readShort();
-        int pathLength = flags & 0xFFF;
-
-        if (pathLength < 0 || pathLength > 0xFFF) {
-            throw new IOException("Invalid path length in index entry: " + pathLength);
-        }
-
-        byte[] pathBytes = new byte[pathLength];
-        in.readFully(pathBytes);
-        String path = new String(pathBytes, StandardCharsets.UTF_8);
-
-        int entrySize = 62 + pathLength;
-        int padding = (8 - (entrySize % 8)) % 8;
-        if (padding > 0) {
-            in.skipBytes(padding);
-        }
-
-        return new IndexEntry(path, hash, mode, size, mtimeSec, mtimeNano);
+        return new IndexEntry(path, hash, mode, size, mtimeMillis);
     }
 }

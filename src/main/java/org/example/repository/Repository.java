@@ -186,7 +186,7 @@ public class Repository {
     }
 
     private IndexEntry createRemovalEntry(String filePath) {
-        return new IndexEntry(filePath, new byte[20], 0, 0, System.currentTimeMillis()/1000, 0);
+        return new IndexEntry(filePath, new byte[20], 0, 0, System.currentTimeMillis());
     }
 
     public String commit(String message, String author) throws IOException {

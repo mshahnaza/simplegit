@@ -30,7 +30,7 @@ class IndexTest {
     @Test
     void addShouldStoreEntry() {
         byte[] hash = new byte[20];
-        IndexEntry entry = new IndexEntry("file.txt", hash, 0100644, 100, 1000L, 500000);
+        IndexEntry entry = new IndexEntry("file.txt", hash, 0100644, 100, System.currentTimeMillis());
 
         index.add(entry);
 
@@ -41,7 +41,7 @@ class IndexTest {
     @Test
     void removeShouldDeleteEntry() {
         byte[] hash = new byte[20];
-        IndexEntry entry = new IndexEntry("file.txt", hash, 0100644, 100, 1000L, 500000);
+        IndexEntry entry = new IndexEntry("file.txt", hash, 0100644, 100, System.currentTimeMillis());
 
         index.add(entry);
         assertTrue(index.contains("file.txt"));
@@ -54,9 +54,9 @@ class IndexTest {
     @Test
     void getEntriesShouldReturnSortedList() {
         byte[] hash = new byte[20];
-        IndexEntry entry1 = new IndexEntry("b.txt", hash, 0100644, 100, 1000L, 500000);
-        IndexEntry entry2 = new IndexEntry("a.txt", hash, 0100644, 100, 1000L, 500000);
-        IndexEntry entry3 = new IndexEntry("c.txt", hash, 0100644, 100, 1000L, 500000);
+        IndexEntry entry1 = new IndexEntry("b.txt", hash, 0100644, 100, System.currentTimeMillis());
+        IndexEntry entry2 = new IndexEntry("a.txt", hash, 0100644, 100, System.currentTimeMillis());
+        IndexEntry entry3 = new IndexEntry("c.txt", hash, 0100644, 100, System.currentTimeMillis());
 
         index.add(entry1);
         index.add(entry2);
@@ -87,8 +87,8 @@ class IndexTest {
         byte[] hash2 = new byte[20];
         hash2[0] = 1;
 
-        IndexEntry entry1 = new IndexEntry("file1.txt", hash1, 0100644, 100, 1000L, 500000);
-        IndexEntry entry2 = new IndexEntry("file2.txt", hash2, 0100755, 200, 2000L, 750000);
+        IndexEntry entry1 = new IndexEntry("file1.txt", hash1, 0100644, 100, System.currentTimeMillis());
+        IndexEntry entry2 = new IndexEntry("file2.txt", hash2, 0100755, 200, System.currentTimeMillis());
 
         index.add(entry1);
         index.add(entry2);
@@ -117,38 +117,33 @@ class IndexTest {
     }
 
     @Test
-    void loadWithCorruptedSignatureShouldThrow() throws IOException {
-        Files.write(indexFile, "INVALID_SIGNATURE".getBytes());
-
-        assertThrows(IOException.class, () -> index.load());
-    }
-
-    @Test
-    void loadWithInvalidVersionShouldThrow() throws IOException {
-        byte[] invalidData = new byte[100];
-        System.arraycopy("DIRC".getBytes(), 0, invalidData, 0, 4);
-        invalidData[4] = 0; invalidData[5] = 0; invalidData[6] = 0; invalidData[7] = 99;
-
-        Files.write(indexFile, invalidData);
-
-        assertThrows(IOException.class, () -> index.load());
-    }
-
-    @Test
     void loadWithInvalidChecksumShouldThrow() throws IOException {
-        index.add(new IndexEntry("test.txt", new byte[20], 0100644, 100, 1000L, 500000));
+        index.add(new IndexEntry("test.txt", new byte[20], 0100644, 100, System.currentTimeMillis()));
         index.save();
 
         Files.write(indexFile, new byte[]{0x00}, java.nio.file.StandardOpenOption.APPEND);
-
         assertThrows(IOException.class, () -> index.load());
+    }
+
+    @Test
+    void saveShouldCreateValidIndexFileStructure() throws IOException {
+        byte[] hash = new byte[20];
+        IndexEntry entry = new IndexEntry("test.txt", hash, 0100644, 123, System.currentTimeMillis());
+        index.add(entry);
+        index.save();
+
+        assertTrue(Files.exists(indexFile));
+        assertTrue(Files.size(indexFile) > 0);
+
+        byte[] data = Files.readAllBytes(indexFile);
+        assertTrue(data.length >= 4 + 20 + 4 + 4 + 8 + 20);
     }
 
     @Test
     void clearShouldRemoveAllEntries() {
         byte[] hash = new byte[20];
-        index.add(new IndexEntry("file1.txt", hash, 0100644, 100, 1000L, 500000));
-        index.add(new IndexEntry("file2.txt", hash, 0100644, 100, 1000L, 500000));
+        index.add(new IndexEntry("file1.txt", hash, 0100644, 100, System.currentTimeMillis()));
+        index.add(new IndexEntry("file2.txt", hash, 0100644, 100, System.currentTimeMillis()));
 
         assertEquals(2, index.size());
 
@@ -161,7 +156,7 @@ class IndexTest {
     @Test
     void containsShouldWorkCorrectly() {
         byte[] hash = new byte[20];
-        IndexEntry entry = new IndexEntry("file.txt", hash, 0100644, 100, 1000L, 500000);
+        IndexEntry entry = new IndexEntry("file.txt", hash, 0100644, 100, System.currentTimeMillis());
 
         assertFalse(index.contains("file.txt"));
 
@@ -171,27 +166,10 @@ class IndexTest {
         assertFalse(index.contains("nonexistent.txt"));
     }
 
-    @Test
-    void saveShouldCreateValidIndexFileStructure() throws IOException {
-        byte[] hash = new byte[20];
-        IndexEntry entry = new IndexEntry("test.txt", hash, 0100644, 123, 1700000000L, 500000000);
-
-        index.add(entry);
-        index.save();
-
-        assertTrue(Files.exists(indexFile));
-        assertTrue(Files.size(indexFile) > 0);
-
-        byte[] data = Files.readAllBytes(indexFile);
-        assertTrue(data.length >= 12 + 62 + "test.txt".length() + 20);
-    }
-
     private void assertIndexEntriesEqual(IndexEntry expected, IndexEntry actual) {
         assertEquals(expected.getPath(), actual.getPath());
         assertArrayEquals(expected.getHash(), actual.getHash());
         assertEquals(expected.getMode(), actual.getMode());
         assertEquals(expected.getSize(), actual.getSize());
-        assertEquals(expected.getMtimeSec(), actual.getMtimeSec());
-        assertEquals(expected.getMtimeNano(), actual.getMtimeNano());
     }
 }

@@ -16,31 +16,26 @@ public class IndexEntry {
     private final byte[] hash;
     private final int mode;
     private final int size;
-    private final long mtimeSec;
-    private final int mtimeNano;
+    private final long mtimeMillis;
 
-    public IndexEntry(String path, byte[] hash, int mode, int size, long mtimeSec, int mtimeNano) {
+    public IndexEntry(String path, byte[] hash, int mode, int size, long mtimeMillis) {
         if(path == null || hash == null) throw new IllegalArgumentException("Path and hash cannot be null");
         if(hash.length != 20) throw new IllegalArgumentException("Hash length must be 20 bytes");
         this.path = path;
         this.hash = hash;
         this.mode = mode;
         this.size = size;
-        this.mtimeSec = mtimeSec;
-        this.mtimeNano = mtimeNano;
+        this.mtimeMillis = mtimeMillis;
     }
 
     public IndexEntry(String indexPath, byte[] hash, int size, long mtimeMillis) {
-        this(indexPath, hash, MODE_FILE, size, mtimeMillis / 1000,
-                (int)((mtimeMillis % 1000) * 1_000_000));
+        this(indexPath, hash, MODE_FILE, size, mtimeMillis);
     }
 
     public String getPath() { return path; }
     public byte[] getHash() { return hash.clone(); }
     public int getMode() { return mode; }
     public int getSize() { return size; }
-    public long getMtimeSec() { return mtimeSec; }
-    public int getMtimeNano() { return mtimeNano; }
 
     public static IndexEntry fromFile(String path, byte[] hash, Path file) throws IOException {
         long size = Files.size(file);
@@ -50,12 +45,11 @@ public class IndexEntry {
         long mtimeMillis = mtime.toMillis();
 
         return new IndexEntry(path, hash, mode, (int)size,
-                mtimeMillis / 1000,
-                (int)((mtimeMillis % 1000) * 1_000_000));
+                mtimeMillis);
     }
 
     public long getMtimeMillis() {
-        return mtimeSec * 1000L + mtimeNano / 1_000_000;
+        return mtimeMillis;
     }
 
     public boolean isModified(Path file) throws IOException {
@@ -77,8 +71,7 @@ public class IndexEntry {
 
         return mode == that.mode &&
                 size == that.size &&
-                mtimeSec == that.mtimeSec &&
-                mtimeNano == that.mtimeNano &&
+                mtimeMillis == that.mtimeMillis &&
                 path.equals(that.path) &&
                 Arrays.equals(hash, that.hash);
     }
@@ -89,8 +82,7 @@ public class IndexEntry {
         result = 31 * result + Arrays.hashCode(hash);
         result = 31 * result + mode;
         result = 31 * result + size;
-        result = 31 * result + Long.hashCode(mtimeSec);
-        result = 31 * result + mtimeNano;
+        result = 31 * result + Long.hashCode(mtimeMillis);
         return result;
     }
 

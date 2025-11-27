@@ -21,24 +21,13 @@ class IndexEntryTest {
         byte[] hash = new byte[20];
 
         assertThrows(IllegalArgumentException.class,
-                () -> new IndexEntry(null, hash, 0100644, 100, 1000L, 500000));
+                () -> new IndexEntry(null, hash, 0100644, 100, System.currentTimeMillis()));
 
         assertThrows(IllegalArgumentException.class,
-                () -> new IndexEntry("file.txt", null, 0100644, 100, 1000L, 500000));
+                () -> new IndexEntry("file.txt", null, 0100644, 100, System.currentTimeMillis()));
 
         assertThrows(IllegalArgumentException.class,
-                () -> new IndexEntry("file.txt", new byte[19], 0100644, 100, 1000L, 500000));
-    }
-
-    @Test
-    void constructorWithMillisShouldConvertCorrectly() {
-        byte[] hash = new byte[20];
-        long mtimeMillis = 1700000000123L;
-
-        IndexEntry entry = new IndexEntry("file.txt", hash, 100, mtimeMillis);
-
-        assertEquals(1700000000L, entry.getMtimeSec());
-        assertEquals(123000000, entry.getMtimeNano());
+                () -> new IndexEntry("file.txt", new byte[19], 0100644, 100, System.currentTimeMillis()));
     }
 
     @Test
@@ -58,7 +47,7 @@ class IndexEntryTest {
         assertArrayEquals(hash, entry.getHash());
         assertEquals(expectedMode, entry.getMode());
         assertEquals(7, entry.getSize());
-        assertEquals(1700000000L, entry.getMtimeSec());
+        assertEquals(1700000000000L, entry.getMtimeMillis());
     }
 
     @Test
@@ -114,23 +103,15 @@ class IndexEntryTest {
     }
 
     @Test
-    void getMtimeMillisShouldConvertCorrectly() {
-        byte[] hash = new byte[20];
-        IndexEntry entry = new IndexEntry("file.txt", hash, 0100644, 100, 1700000000L, 500000000);
-
-        assertEquals(1700000000500L, entry.getMtimeMillis());
-    }
-
-    @Test
     void equalsShouldWorkCorrectly() {
         byte[] hash1 = new byte[20];
         byte[] hash2 = new byte[20];
         hash2[0] = 1;
 
-        IndexEntry entry1 = new IndexEntry("file.txt", hash1, 0100644, 100, 1000L, 500000);
-        IndexEntry entry2 = new IndexEntry("file.txt", hash1, 0100644, 100, 1000L, 500000);
-        IndexEntry entry3 = new IndexEntry("other.txt", hash1, 0100644, 100, 1000L, 500000);
-        IndexEntry entry4 = new IndexEntry("file.txt", hash2, 0100644, 100, 1000L, 500000);
+        IndexEntry entry1 = new IndexEntry("file.txt", hash1, 0100644, 100, System.currentTimeMillis());
+        IndexEntry entry2 = new IndexEntry("file.txt", hash1, 0100644, 100, System.currentTimeMillis());
+        IndexEntry entry3 = new IndexEntry("other.txt", hash1, 0100644, 100, System.currentTimeMillis());
+        IndexEntry entry4 = new IndexEntry("file.txt", hash2, 0100644, 100, System.currentTimeMillis());
 
         assertEquals(entry1, entry2);
         assertNotEquals(entry1, entry3);
@@ -142,7 +123,7 @@ class IndexEntryTest {
     @Test
     void hashCodeShouldBeConsistent() {
         byte[] hash = new byte[20];
-        IndexEntry entry = new IndexEntry("file.txt", hash, 0100644, 100, 1000L, 500000);
+        IndexEntry entry = new IndexEntry("file.txt", hash, 0100644, 100, System.currentTimeMillis());
 
         int hash1 = entry.hashCode();
         int hash2 = entry.hashCode();
@@ -156,7 +137,7 @@ class IndexEntryTest {
         hash[0] = (byte) 0x12;
         hash[1] = (byte) 0xab;
 
-        IndexEntry entry = new IndexEntry("file.txt", hash, 0100644, 100, 1000L, 500000);
+        IndexEntry entry = new IndexEntry("file.txt", hash, 0100644, 100, System.currentTimeMillis());
         String result = entry.toString();
 
         assertTrue(result.contains("100644"));
