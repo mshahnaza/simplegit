@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Collectors;
+import static org.example.utils.Colors.*;
 
 public class Repository {
     private final Path workingDir;
@@ -705,24 +706,24 @@ public class Repository {
 
         if (hasStaged) {
             System.out.println("Changes to be committed:");
-            stagedAdded.forEach(p -> System.out.println("    new file:   " + p));
-            stagedModified.forEach(p -> System.out.println("    modified:   " + p));
-            stagedDeleted.forEach(p -> System.out.println("    deleted:    " + p));
+            stagedAdded.forEach(p -> System.out.println(GREEN + "    new file:   " + p + RESET));
+            stagedModified.forEach(p -> System.out.println(GREEN + "    modified:   " + p + RESET));
+            stagedDeleted.forEach(p -> System.out.println(GREEN + "    deleted:    " + p + RESET));
             System.out.println();
         }
 
         if (hasUnstaged) {
             System.out.println("Changes not staged for commit:");
             System.out.println("  (use \"git add <file>...\" to update what will be committed)");
-            unstagedModified.forEach(p -> System.out.println("    modified:   " + p));
-            unstagedDeleted.forEach(p -> System.out.println("    deleted:    " + p));
+            unstagedModified.forEach(p -> System.out.println(YELLOW + "    modified:   " + p + RESET));
+            unstagedDeleted.forEach(p -> System.out.println(YELLOW + "    deleted:    " + p + RESET));
             System.out.println();
         }
 
         if (hasUntracked) {
             System.out.println("Untracked files:");
             System.out.println("  (use \"git add <file>...\" to include in what will be committed)");
-            untracked.forEach(p -> System.out.println("    " + p));
+            untracked.forEach(p -> System.out.println(RED + "    " + p + RESET));
             System.out.println();
         }
 

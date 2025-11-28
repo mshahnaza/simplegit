@@ -5,6 +5,7 @@ import org.example.repository.Repository;
 
 import java.io.IOException;
 import java.util.List;
+import static org.example.utils.Colors.*;
 
 public class LogCommand implements Command {
     @Override
@@ -17,7 +18,7 @@ public class LogCommand implements Command {
         }
 
         for (Commit commit : commits) {
-            System.out.println("commit " + commit.getHexhash());
+            System.out.println(YELLOW + "commit " + commit.getHexhash() + RESET);
             System.out.println("Author: " + commit.getAuthor());
             System.out.println("Date:   " + formatDate(commit.getCommitter()));
             System.out.println();

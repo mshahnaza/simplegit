@@ -1,6 +1,7 @@
 package org.example.commands;
 
 import org.example.repository.Repository;
+import static org.example.utils.Colors.*;
 
 import java.io.IOException;
 import java.util.List;
@@ -14,7 +15,7 @@ public class BranchCommand implements Command {
 
             for (String branch : branches) {
                 if (branch.equals(currentBranch)) {
-                    System.out.println("* " + branch);
+                    System.out.println(GREEN_BOLD + "* " + branch + RESET);
                 } else {
                     System.out.println("  " + branch);
                 }
