@@ -871,4 +871,96 @@ public class Repository {
         System.out.println("    " + commit.getMessage());
     }
 
+    public void reset(String mode, String commitHash) throws IOException {
+        String actualCommitHash = resolveCommitHash(commitHash);
+
+        if (actualCommitHash == null) {
+            throw new IllegalStateException("No commits yet");
+        }
+
+        try {
+            if (!objectStorage.exists(actualCommitHash)) {
+                throw new IOException("Commit not found: " + commitHash);
+            }
+        } catch (IllegalArgumentException e) {
+            throw new IOException("Invalid commit hash: " + commitHash);
+        }
+
+        if (mode == null || mode.isEmpty()) {
+            mode = "--mixed";
+        }
+
+        Commit targetCommit = (Commit) objectStorage.load(actualCommitHash);
+
+        switch (mode) {
+            case "--soft":
+                resetSoft(actualCommitHash);
+                break;
+            case "--mixed":
+                resetMixed(targetCommit);
+                break;
+            case "--hard":
+                resetHard(targetCommit);
+                break;
+            default:
+                throw new IllegalArgumentException("Unknown reset mode: " + mode);
+        }
+
+        String shortMessage = getShortMessage(targetCommit);
+        System.out.println("HEAD is now at " + actualCommitHash.substring(0, 7) + " " + shortMessage);
+    }
+
+    private String getShortMessage(Commit commit) {
+        String message = commit.getMessage();
+        if (message == null || message.isEmpty()) {
+            return "(no message)";
+        }
+        return message.split("\n")[0];
+    }
+
+    private String resolveCommitHash(String commitSpec) throws IOException {
+        if (commitSpec == null || "HEAD".equals(commitSpec)) {
+            return refStorage.getHeadCommit();
+        }
+
+        if (commitSpec.matches("HEAD~\\d+")) {
+            int stepsBack = Integer.parseInt(commitSpec.substring(5));
+            return getNthParent(refStorage.getHeadCommit(), stepsBack);
+        }
+
+        if (refStorage.branchExists(commitSpec)) {
+            return refStorage.getBranchCommit(commitSpec);
+        }
+
+        return commitSpec;
+    }
+
+    private String getNthParent(String commitHash, int n) throws IOException {
+        String current = commitHash;
+        for (int i = 0; i < n; i++) {
+            Commit commit = (Commit) objectStorage.load(current);
+            List<byte[]> parents = commit.getParentHashes();
+            if (parents.isEmpty()) {
+                throw new IOException("No parent commit for " + current);
+            }
+            current = SHA1Hasher.toHex(parents.get(0));
+        }
+        return current;
+    }
+
+    private void resetSoft(String commitHash) throws IOException {
+        refStorage.updateHeadCommit(commitHash);
+    }
+
+    private void resetMixed(Commit targetCommit) throws IOException {
+        refStorage.updateHeadCommit(targetCommit.getHexhash());
+        updateIndexFromCommit(targetCommit);
+    }
+
+    private void resetHard(Commit targetCommit) throws IOException {
+        refStorage.updateHeadCommit(targetCommit.getHexhash());
+        clearWorkingDirectory();
+        restoreTree(targetCommit.getTreeHash(), workingDir);
+        updateIndexFromCommit(targetCommit);
+    }
 }

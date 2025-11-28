@@ -17,6 +17,7 @@ public class CommandParser {
         commands.put("checkout", new CheckoutCommand());
         commands.put("rm", new RemoveCommand());
         commands.put("tag", new TagCommand());
+        commands.put("reset", new ResetCommand());
     }
 
     public Command parse(String[] args) {

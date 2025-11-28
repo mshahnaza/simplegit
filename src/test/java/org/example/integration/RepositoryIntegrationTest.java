@@ -221,7 +221,7 @@ class RepositoryIntegrationTest {
         assertTrue(tags.contains("v1.0"));
         assertTrue(tags.contains("v1.1"));
         assertTrue(tags.contains("release"));
-        assertEquals("release", tags.get(0)); // Should be sorted
+        assertEquals("release", tags.get(0));
         assertEquals("v1.0", tags.get(1));
         assertEquals("v1.1", tags.get(2));
     }
@@ -359,5 +359,267 @@ class RepositoryIntegrationTest {
         assertEquals(2, tags.size());
         assertTrue(tags.contains("main-release"));
         assertTrue(tags.contains("feature-test"));
+    }
+
+    @Test
+    void shouldResetSoft() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.write(testFile, "content v1".getBytes());
+        repo.add("test.txt");
+        String commit1 = repo.commit("First commit", "Test User <test@example.com>");
+
+        Files.write(testFile, "content v2".getBytes());
+        repo.add("test.txt");
+        String commit2 = repo.commit("Second commit", "Test User <test@example.com>");
+
+        List<Commit> log = repo.log();
+        assertEquals(2, log.size());
+        assertEquals("Second commit", log.get(0).getMessage());
+
+        repo.reset("--soft", commit1);
+
+        log = repo.log();
+        assertEquals(1, log.size());
+        assertEquals("First commit", log.get(0).getMessage());
+
+        String content = Files.readString(testFile);
+        assertEquals("content v2", content);
+    }
+
+    @Test
+    void shouldResetMixed() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.write(testFile, "content v1".getBytes());
+        repo.add("test.txt");
+        String commit1 = repo.commit("First commit", "Test User <test@example.com>");
+
+        Files.write(testFile, "content v2".getBytes());
+        repo.add("test.txt");
+        String commit2 = repo.commit("Second commit", "Test User <test@example.com>");
+
+        Files.write(testFile, "content v3".getBytes());
+        repo.add("test.txt");
+
+        repo.reset("--mixed", commit1);
+
+        List<Commit> log = repo.log();
+        assertEquals(1, log.size());
+        assertEquals("First commit", log.get(0).getMessage());
+
+        String content = Files.readString(testFile);
+        assertEquals("content v3", content);
+
+        repo.status();
+    }
+
+    @Test
+    void shouldResetHard() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.write(testFile, "content v1".getBytes());
+        repo.add("test.txt");
+        String commit1 = repo.commit("First commit", "Test User <test@example.com>");
+
+        Files.write(testFile, "content v2".getBytes());
+        repo.add("test.txt");
+        String commit2 = repo.commit("Second commit", "Test User <test@example.com>");
+
+        Files.write(testFile, "content v3".getBytes());
+
+        assertThrows(IOException.class, () -> repo.reset("--hard", commit1),
+                "Should prevent hard reset with uncommitted changes");
+
+        repo.add("test.txt");
+        repo.commit("Third commit", "Test User <test@example.com>");
+
+        repo.reset("--hard", commit1);
+
+        List<Commit> log = repo.log();
+        assertEquals(1, log.size());
+        assertEquals("First commit", log.get(0).getMessage());
+
+        String content = Files.readString(testFile);
+        assertEquals("content v1", content);
+
+        assertDoesNotThrow(() -> repo.status());
+    }
+
+    @Test
+    void shouldResetToHEAD() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.write(testFile, "content v1".getBytes());
+        repo.add("test.txt");
+        repo.commit("First commit", "Test User <test@example.com>");
+
+        Files.write(testFile, "content v2".getBytes());
+        repo.add("test.txt");
+        String currentHead = repo.commit("Second commit", "Test User <test@example.com>");
+
+        repo.reset("--mixed", "HEAD");
+
+        List<Commit> log = repo.log();
+        assertEquals(2, log.size());
+        assertEquals("Second commit", log.get(0).getMessage());
+    }
+
+    @Test
+    void shouldResetUsingBranchName() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.write(testFile, "content".getBytes());
+        repo.add("test.txt");
+        repo.commit("First commit", "Test User <test@example.com>");
+
+        repo.createBranch("feature");
+        repo.checkout("feature");
+
+        Files.write(testFile, "feature content".getBytes());
+        repo.add("test.txt");
+        repo.commit("Feature commit", "Test User <test@example.com>");
+
+        repo.reset("--mixed", "master");
+
+        List<Commit> log = repo.log();
+        assertEquals(1, log.size());
+        assertEquals("First commit", log.get(0).getMessage());
+    }
+
+    @Test
+    void shouldPreventResetHardWithUncommittedChanges() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.write(testFile, "content v1".getBytes());
+        repo.add("test.txt");
+        String commit1 = repo.commit("First commit", "Test User <test@example.com>");
+
+        Files.write(testFile, "content v2".getBytes());
+        repo.add("test.txt");
+        repo.commit("Second commit", "Test User <test@example.com>");
+
+        Files.write(testFile, "uncommitted changes".getBytes());
+
+        assertThrows(IOException.class, () -> repo.reset("--hard", commit1));
+    }
+
+    @Test
+    void shouldResetToPreviousCommitUsingRelativeSyntax() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+
+        Files.write(testFile, "commit 1".getBytes());
+        repo.add("test.txt");
+        String commit1 = repo.commit("Commit 1", "Test User <test@example.com>");
+
+        Files.write(testFile, "commit 2".getBytes());
+        repo.add("test.txt");
+        repo.commit("Commit 2", "Test User <test@example.com>");
+
+        Files.write(testFile, "commit 3".getBytes());
+        repo.add("test.txt");
+        repo.commit("Commit 3", "Test User <test@example.com>");
+
+        repo.reset("--mixed", "HEAD~1");
+
+        List<Commit> log = repo.log();
+        assertEquals(2, log.size());
+        assertEquals("Commit 2", log.get(0).getMessage());
+    }
+
+    @Test
+    void shouldHandleResetWithDefaultMode() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.write(testFile, "content v1".getBytes());
+        repo.add("test.txt");
+        String commit1 = repo.commit("First commit", "Test User <test@example.com>");
+
+        Files.write(testFile, "content v2".getBytes());
+        repo.add("test.txt");
+        repo.commit("Second commit", "Test User <test@example.com>");
+
+        repo.reset(null, commit1);
+
+        List<Commit> log = repo.log();
+        assertEquals(1, log.size());
+        assertEquals("First commit", log.get(0).getMessage());
+    }
+
+    @Test
+    void shouldPreventResetToNonExistentCommit() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.write(testFile, "content".getBytes());
+        repo.add("test.txt");
+        repo.commit("First commit", "Test User <test@example.com>");
+
+        assertThrows(IOException.class,
+                () -> repo.reset("--mixed", "nonexistent1234567890123456789012345678901234567890"));
+    }
+
+    @Test
+    void shouldHandleResetInEmptyRepository() throws IOException {
+        repo.init();
+
+        assertThrows(IllegalStateException.class,
+                () -> repo.reset("--mixed", "HEAD"));
+    }
+
+    @Test
+    void shouldResetAndMaintainBranchReferences() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.write(testFile, "content".getBytes());
+        repo.add("test.txt");
+        repo.commit("First commit", "Test User <test@example.com>");
+
+        repo.createBranch("feature");
+        String currentBranch = repo.getCurrentBranch();
+        assertEquals("master", currentBranch);
+
+        repo.reset("--soft", "HEAD");
+
+        currentBranch = repo.getCurrentBranch();
+        assertEquals("master", currentBranch);
+    }
+
+    @Test
+    void shouldResetWithComplexFileStructure() throws IOException {
+        repo.init();
+
+        Files.createDirectories(tempDir.resolve("src/main/java"));
+        Files.createDirectories(tempDir.resolve("src/test/java"));
+
+        Files.write(tempDir.resolve("src/main/java/Main.java"), "class Main {}".getBytes());
+        Files.write(tempDir.resolve("src/test/java/Test.java"), "class Test {}".getBytes());
+        Files.write(tempDir.resolve("README.md"), "# Project".getBytes());
+
+        repo.addAll();
+        String commit1 = repo.commit("Initial structure", "Test User <test@example.com>");
+
+        Files.write(tempDir.resolve("src/main/java/Main.java"), "class Main { updated }".getBytes());
+        Files.write(tempDir.resolve("pom.xml"), "<project></project>".getBytes());
+
+        repo.addAll();
+        repo.commit("Updated files", "Test User <test@example.com>");
+
+        repo.reset("--hard", commit1);
+
+        String mainContent = Files.readString(tempDir.resolve("src/main/java/Main.java"));
+        assertEquals("class Main {}", mainContent);
+
+        assertFalse(Files.exists(tempDir.resolve("pom.xml")));
     }
 }
