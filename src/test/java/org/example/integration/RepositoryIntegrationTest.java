@@ -202,4 +202,162 @@ class RepositoryIntegrationTest {
 
         assertThrows(IllegalStateException.class, () -> repo.createBranch("feature"));
     }
+
+    @Test
+    void shouldCreateAndListTags() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.write(testFile, "content".getBytes());
+        repo.add("test.txt");
+        String commitHash = repo.commit("Initial commit", "Test User <test@example.com>");
+
+        repo.createTag("v1.0");
+        repo.createTag("v1.1");
+        repo.createTag("release");
+
+        List<String> tags = repo.listTags();
+        assertEquals(3, tags.size());
+        assertTrue(tags.contains("v1.0"));
+        assertTrue(tags.contains("v1.1"));
+        assertTrue(tags.contains("release"));
+        assertEquals("release", tags.get(0)); // Should be sorted
+        assertEquals("v1.0", tags.get(1));
+        assertEquals("v1.1", tags.get(2));
+    }
+
+    @Test
+    void shouldPreventDuplicateTags() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.write(testFile, "content".getBytes());
+        repo.add("test.txt");
+        repo.commit("Initial commit", "Test User <test@example.com>");
+
+        repo.createTag("v1.0");
+
+        assertThrows(IOException.class, () -> repo.createTag("v1.0"));
+    }
+
+    @Test
+    void shouldDeleteTags() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.write(testFile, "content".getBytes());
+        repo.add("test.txt");
+        repo.commit("Initial commit", "Test User <test@example.com>");
+
+        repo.createTag("v1.0");
+        repo.createTag("v1.1");
+
+        List<String> tags = repo.listTags();
+        assertEquals(2, tags.size());
+
+        repo.deleteTag("v1.0");
+
+        tags = repo.listTags();
+        assertEquals(1, tags.size());
+        assertTrue(tags.contains("v1.1"));
+        assertFalse(tags.contains("v1.0"));
+    }
+
+    @Test
+    void shouldPreventDeletingNonExistentTag() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.write(testFile, "content".getBytes());
+        repo.add("test.txt");
+        repo.commit("Initial commit", "Test User <test@example.com>");
+
+        assertThrows(IOException.class, () -> repo.deleteTag("nonexistent"));
+    }
+
+    @Test
+    void shouldShowTagDetails() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.write(testFile, "content".getBytes());
+        repo.add("test.txt");
+        String commitHash = repo.commit("Initial commit with message", "Test User <test@example.com>");
+
+        repo.createTag("v1.0");
+
+        assertDoesNotThrow(() -> repo.showTag("v1.0"));
+    }
+
+    @Test
+    void shouldHandleInvalidTagNames() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.write(testFile, "content".getBytes());
+        repo.add("test.txt");
+        repo.commit("Initial commit", "Test User <test@example.com>");
+
+        assertThrows(IllegalArgumentException.class, () -> repo.createTag(""));
+        assertThrows(IllegalArgumentException.class, () -> repo.createTag(null));
+        assertThrows(IllegalArgumentException.class, () -> repo.createTag("invalid/name"));
+    }
+
+    @Test
+    void shouldShowNonExistentTag() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.write(testFile, "content".getBytes());
+        repo.add("test.txt");
+        repo.commit("Initial commit", "Test User <test@example.com>");
+
+        assertThrows(IOException.class, () -> repo.showTag("nonexistent"));
+    }
+
+    @Test
+    void shouldMaintainTagsAcrossCommits() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+
+        Files.write(testFile, "v1".getBytes());
+        repo.add("test.txt");
+        String commit1 = repo.commit("First commit", "Test User <test@example.com>");
+        repo.createTag("v1.0");
+
+        Files.write(testFile, "v2".getBytes());
+        repo.add("test.txt");
+        String commit2 = repo.commit("Second commit", "Test User <test@example.com>");
+        repo.createTag("v2.0");
+
+        List<String> tags = repo.listTags();
+        assertEquals(2, tags.size());
+        assertTrue(tags.contains("v1.0"));
+        assertTrue(tags.contains("v2.0"));
+    }
+
+    @Test
+    void shouldHandleTagsWithBranches() throws IOException {
+        repo.init();
+
+        Path testFile = tempDir.resolve("test.txt");
+        Files.write(testFile, "main content".getBytes());
+        repo.add("test.txt");
+        repo.commit("Main commit", "Test User <test@example.com>");
+        repo.createTag("main-release");
+
+        repo.createBranch("feature");
+        repo.checkout("feature");
+
+        Files.write(testFile, "feature content".getBytes());
+        repo.add("test.txt");
+        repo.commit("Feature commit", "Test User <test@example.com>");
+        repo.createTag("feature-test");
+
+        List<String> tags = repo.listTags();
+        assertEquals(2, tags.size());
+        assertTrue(tags.contains("main-release"));
+        assertTrue(tags.contains("feature-test"));
+    }
 }

@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class Repository {
     private final Path workingDir;
@@ -799,4 +800,75 @@ public class Repository {
     private String normalizePath(Path path) {
         return workingDir.relativize(path).toString().replace(File.separatorChar, '/');
     }
+
+    public void createTag(String tagName) throws IOException {
+        if (tagName == null || tagName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Tag name cannot be empty");
+        }
+        if (tagName.contains("/") || tagName.contains("\\")) {
+            throw new IllegalArgumentException("Invalid tag name: " + tagName);
+        }
+
+        String headCommit = refStorage.getHeadCommit();
+        if (headCommit == null) {
+            throw new IllegalStateException("No commits yet");
+        }
+
+        Path tagPath = gitDir.resolve("refs/tags").resolve(tagName);
+        if (Files.exists(tagPath)) {
+            throw new IOException("Tag already exists: " + tagName);
+        }
+
+        Files.createDirectories(tagPath.getParent());
+        Files.writeString(tagPath, headCommit + "\n");
+
+        System.out.println("Created tag '" + tagName + "' at " + headCommit.substring(0, 7));
+    }
+
+    public List<String> listTags() throws IOException {
+        Path tagsDir = gitDir.resolve("refs/tags");
+        if (!Files.exists(tagsDir)) {
+            return new ArrayList<>();
+        }
+
+        try (var stream = Files.list(tagsDir)) {
+            return stream.filter(Files::isRegularFile)
+                    .map(path -> path.getFileName().toString())
+                    .sorted()
+                    .collect(Collectors.toList());
+        }
+    }
+
+    public void deleteTag(String tagName) throws IOException {
+        Path tagPath = gitDir.resolve("refs/tags").resolve(tagName);
+        if (!Files.exists(tagPath)) {
+            throw new IOException("Tag does not exist: " + tagName);
+        }
+
+        Files.delete(tagPath);
+        System.out.println("Deleted tag '" + tagName + "'");
+    }
+
+    public void showTag(String tagName) throws IOException {
+        Path tagPath = gitDir.resolve("refs/tags").resolve(tagName);
+        if (!Files.exists(tagPath)) {
+            throw new IOException("Tag does not exist: " + tagName);
+        }
+
+        String commitHash = Files.readString(tagPath).trim();
+        if (!objectStorage.exists(commitHash)) {
+            throw new IOException("Commit not found for tag: " + tagName);
+        }
+        Commit commit = (Commit) objectStorage.load(commitHash);
+
+        System.out.println("tag " + tagName);
+        System.out.println("Tagger: " + commit.getAuthor());
+        System.out.println();
+        System.out.println("commit " + commitHash);
+        System.out.println("Author: " + commit.getAuthor());
+        System.out.println("Date:   " + new java.util.Date(extractTimestamp(commit) * 1000));
+        System.out.println();
+        System.out.println("    " + commit.getMessage());
+    }
+
 }

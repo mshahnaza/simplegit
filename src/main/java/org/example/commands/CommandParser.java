@@ -16,6 +16,7 @@ public class CommandParser {
         commands.put("branch", new BranchCommand());
         commands.put("checkout", new CheckoutCommand());
         commands.put("rm", new RemoveCommand());
+        commands.put("tag", new TagCommand());
     }
 
     public Command parse(String[] args) {
