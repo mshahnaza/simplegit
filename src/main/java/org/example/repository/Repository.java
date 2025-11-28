@@ -262,7 +262,6 @@ public class Repository {
                 String entryDir = getDirectoryPath(entry.getPath());
                 if (dir.equals(entryDir)) {
                     String fileName = getFileName(entry.getPath());
-                    String mode = (entry.getMode() == IndexEntry.MODE_EXECUTABLE) ? "100755" : "100644";
                     tree.addFile(fileName, entry.getHash());
                 }
             }
@@ -790,11 +789,6 @@ public class Repository {
                 collectFilesFromTree(subTree, fullPath, files);
             }
         }
-    }
-
-    private boolean isFileInHead(String filePath) throws IOException {
-        Map<String, byte[]> headFiles = getHeadFiles();
-        return headFiles.containsKey(filePath);
     }
 
     private String normalizePath(String path) {

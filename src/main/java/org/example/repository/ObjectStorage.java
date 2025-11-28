@@ -113,20 +113,12 @@ public class ObjectStorage {
     }
 
     private GitObject createObject(String type, String hash, byte[] content) throws IOException {
-        GitObject obj;
-        switch (type) {
-            case "blob":
-                obj = new Blob();
-                break;
-            case "tree":
-                obj = new Tree();
-                break;
-            case "commit":
-                obj = new Commit();
-                break;
-            default:
-                throw new IOException("Unknown object type: " + type);
-        }
+        GitObject obj = switch (type) {
+            case "blob" -> new Blob();
+            case "tree" -> new Tree();
+            case "commit" -> new Commit();
+            default -> throw new IOException("Unknown object type: " + type);
+        };
 
         obj.deserialize(content);
 

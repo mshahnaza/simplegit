@@ -9,9 +9,9 @@ import java.util.List;
 public class Tree extends GitObject {
 
     public static class Entry {
-        private String mode;
-        private byte[] hash;
-        private String name;
+        private final String mode;
+        private final byte[] hash;
+        private final String name;
 
         public Entry(String mode, byte[] hash, String name) {
             this.mode = mode;
@@ -34,7 +34,7 @@ public class Tree extends GitObject {
         }
     }
 
-    private List<Entry> entries;
+    private final List<Entry> entries;
 
     public Tree() {
         type = "tree";
@@ -122,8 +122,6 @@ public class Tree extends GitObject {
             byte[] hash = new byte[20];
             System.arraycopy(data, position, hash, 0, 20);
             position += 20;
-
-            String type = ("100644".equals(mode) || "100755".equals(mode)) ? "blob" : "tree";
 
             entries.add(new Entry(mode, hash, name));
         }
