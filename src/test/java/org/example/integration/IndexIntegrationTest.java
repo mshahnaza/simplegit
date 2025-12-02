@@ -99,7 +99,7 @@ public class IndexIntegrationTest {
     }
 
     @Test
-    void shouldHandleFileModifications() throws IOException {
+    void shouldHandleFileModifications() throws IOException, InterruptedException {
         Path file = workspace.resolve("config.txt");
         Files.write(file, "version1".getBytes());
 
@@ -109,6 +109,7 @@ public class IndexIntegrationTest {
         index.save();
 
         Files.write(file, "version2".getBytes());
+        Thread.sleep(10);
 
         assertTrue(entry1.isModified(file));
 
