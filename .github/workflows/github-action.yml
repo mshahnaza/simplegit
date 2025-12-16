@@ -52,76 +52,38 @@ jobs:
       - name: Push to Docker Hub
         run: docker push ${{ secrets.DOCKER_USERNAME }}/mygit
 
-      - name: Find exact JAR file
-        id: find-exact-jar
-        run: |
-            JAR_FILE=$(ls target/simplegit-*.jar | head -1)
-            echo "JAR to copy: $JAR_FILE"
-            echo "jar_file=$JAR_FILE" >> $GITHUB_OUTPUT
-            
-            if [ ! -f "$JAR_FILE" ]; then
-            echo "ERROR: JAR file not found!"
-            ls -la target/
-            exit 1
-            fi
-
-      - name: Copy JAR to server (FIXED PATH)
+      - name: Copy JAR to server
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          source: "${{ steps.find-exact-jar.outputs.jar_file }}"
+          source: "target/simplegit-*.jar"
           target: "/opt/mygit/"
           overwrite: true
-          rm: false
+          strip_components: 0
 
-      - name: Rename JAR on server to mygit.jar
+      - name: Setup on server
         uses: appleboy/ssh-action@v0.1.4
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           script: |
-            echo "Renaming JAR on server..."
+            echo "JAR is successfully updated"
             cd /opt/mygit
-            rm -f mygit.jar
-            NEW_JAR=$(ls simplegit-*.jar 2>/dev/null | head -1)
-            if [ -n "$NEW_JAR" ]; then
-              mv "$NEW_JAR" mygit.jar
-              echo "Renamed $NEW_JAR to mygit.jar"
-            else
-              echo "No JAR files found in /opt/mygit/"
-              ls -la /opt/mygit/
-              exit 1
-            fi
-
-      - name: Update run.sh on server
-        uses: appleboy/ssh-action@v0.1.4
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USERNAME }}
-          password: ${{ secrets.SERVER_PASSWORD }}
-          script: |
-            echo "Updating run.sh..."
-            cat > /opt/mygit/run.sh << 'EOF'
-            #!/bin/bash
-            exec java -jar /opt/mygit/mygit.jar "$@"
-            EOF
-            chmod +x /opt/mygit/run.sh
-            echo "run.sh updated"
-
-      - name: Update mygit command
-        uses: appleboy/ssh-action@v0.1.4
-        with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USERNAME }}
-          password: ${{ secrets.SERVER_PASSWORD }}
-          script: |
-            echo "Updating /usr/local/bin/mygit..."
-            cat > /usr/local/bin/mygit << 'EOF'
-            #!/bin/bash
-            exec /opt/mygit/run.sh "$@"
-            EOF
+            rm -rf target 2>/dev/null || true
+            mv simplegit-*.jar mygit.jar 2>/dev/null || echo "JAR is already renamed"
+            echo 'java -jar /opt/mygit/mygit.jar "$@"' > run.sh
+            chmod +x run.sh
+            echo 'exec /opt/mygit/run.sh "$@"' > /usr/local/bin/mygit
             chmod +x /usr/local/bin/mygit
-            echo "mygit command updated"
+            cd /tmp
+            rm -rf test-deploy
+            mkdir -p test-deploy
+            cd test-deploy
+            mygit init
+            echo "test from GitHub Actions" > file.txt
+            mygit add file.txt
+            mygit commit -m "test deploy"
+            mygit log --oneline
