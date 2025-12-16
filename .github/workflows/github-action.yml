@@ -58,7 +58,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          source: "target/simplegit-*.jar"
+          source: "/simplegit-*.jar"
           target: "/opt/mygit/"
           overwrite: true
 
@@ -70,8 +70,6 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           script: |
             cd /opt/mygit
-            JAR_FILE=$(find . -maxdepth 1 -name "*.jar" -type f ! -name "mygit.jar" | head -1)
-            mv "$JAR_FILE" mygit.jar
             echo 'java -jar /opt/mygit/mygit.jar "$@"' > run.sh
             chmod +x run.sh
             echo 'exec /opt/mygit/run.sh "$@"' > /usr/local/bin/mygit
