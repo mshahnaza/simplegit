@@ -58,7 +58,7 @@ jobs:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
-          source: "target/simplegit-*.jar"
+          source: "${{ steps.debug.outputs.jar_file }}"
           target: "/opt/mygit/"
           overwrite: true
           strip_components: 0
