@@ -35,7 +35,7 @@ jobs:
           distribution: 'temurin'
 
       - name: Build JAR
-        run: mvn package -DskipTests  # ← Собираем JAR здесь!
+        run: mvn package -DskipTests
 
       - name: Set up Docker
         uses: docker/setup-buildx-action@v3
@@ -51,3 +51,30 @@ jobs:
 
       - name: Push to Docker Hub
         run: docker push ${{ secrets.DOCKER_USERNAME }}/mygit
+
+      - name: Copy JAR to server
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          source: "target/simplegit-*.jar"
+          target: "/opt/mygit/mygit.jar"
+
+      - name: Test deployment
+        uses: appleboy/ssh-action@v0.1.4
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USERNAME }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          script: |
+            echo "JAR is successfully updated"
+            echo "Тестируем..."
+            cd /tmp
+            mkdir -p test-deploy
+            cd test-deploy
+            git init
+            echo "test" > file.txt
+            git add file.txt
+            git commit -m "test deploy"
+            echo "Everything works"
