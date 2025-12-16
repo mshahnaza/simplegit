@@ -59,7 +59,7 @@ jobs:
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           source: "target/simplegit-*.jar"
-          target: "/opt/mygit/mygit.jar"
+          target: "/opt/mygit/"
           overwrite: true
 
       - name: Setup on server
@@ -70,6 +70,7 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           script: |
             cd /opt/mygit
+            mv simplegit-*.jar mygit.jar
             echo 'java -jar /opt/mygit/mygit.jar "$@"' > run.sh
             chmod +x run.sh
             echo 'exec /opt/mygit/run.sh "$@"' > /usr/local/bin/mygit
