@@ -61,7 +61,6 @@ jobs:
           source: "target/simplegit-*.jar"
           target: "/opt/mygit/mygit.jar"
           overwrite: true
-          strip_components: 1
 
       - name: Setup on server
         uses: appleboy/ssh-action@v0.1.4
