@@ -109,7 +109,7 @@ public class IndexIntegrationTest {
         index.save();
 
         Files.write(file, "version2".getBytes());
-        Thread.sleep(10);
+        Thread.sleep(30);
 
         assertTrue(entry1.isModified(file));
 
