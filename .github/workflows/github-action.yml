@@ -59,8 +59,9 @@ jobs:
           username: ${{ secrets.SERVER_USERNAME }}
           password: ${{ secrets.SERVER_PASSWORD }}
           source: "target/simplegit-*.jar"
-          target: "/opt/mygit/"
+          target: "/opt/mygit/mygit.jar"
           overwrite: true
+          strip_components: 1
 
       - name: Setup on server
         uses: appleboy/ssh-action@v0.1.4
@@ -70,7 +71,6 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           script: |
             cd /opt/mygit
-            mv simplegit-*.jar mygit.jar 2>/dev/null || echo "Already renamed"
             echo 'java -jar /opt/mygit/mygit.jar "$@"' > run.sh
             chmod +x run.sh
             echo 'exec /opt/mygit/run.sh "$@"' > /usr/local/bin/mygit
