@@ -70,7 +70,11 @@ jobs:
           password: ${{ secrets.SERVER_PASSWORD }}
           script: |
             cd /opt/mygit
-            mv simplegit-*.jar mygit.jar
+            JAR_FILE=$(find . -maxdepth 1 -name "*.jar" -type f ! -name "mygit.jar" | head -1)
+            
+            if [ -n "$JAR_FILE" ]; then
+              echo "Found JAR: $JAR_FILE"
+              mv "$JAR_FILE" mygit.jar
             echo 'java -jar /opt/mygit/mygit.jar "$@"' > run.sh
             chmod +x run.sh
             echo 'exec /opt/mygit/run.sh "$@"' > /usr/local/bin/mygit
