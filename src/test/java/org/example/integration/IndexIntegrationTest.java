@@ -15,6 +15,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -109,7 +110,7 @@ public class IndexIntegrationTest {
         index.save();
 
         Files.write(file, "version2".getBytes());
-        Thread.sleep(30);
+        Files.setLastModifiedTime(file, FileTime.fromMillis(System.currentTimeMillis() + 1000));
 
         assertTrue(entry1.isModified(file));
 
